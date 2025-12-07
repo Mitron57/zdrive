@@ -13,6 +13,151 @@
 - **billing** (порт 3004) - Платежи и QR-коды
 - **dispatcher** (порт 8080) - API Gateway, объединяет все сервисы
 
+### Схема взаимодействия API
+
+```mermaid
+graph LR
+    subgraph "Client APIs"
+        CF_API[Client Frontend API<br/>RESTful HTTP/JSON]
+        AF_API[Admin Frontend API<br/>RESTful HTTP/JSON]
+    end
+    
+    subgraph "API Gateway"
+        DG_API[Dispatcher API<br/>RESTful HTTP/JSON<br/>JWT Authentication]
+    end
+    
+    subgraph "Microservice APIs"
+        US_API[Users Service API<br/>RESTful HTTP/JSON<br/>Port 3000]
+        CS_API[Cars Service API<br/>RESTful HTTP/JSON<br/>Port 3001]
+        TS_API[Trips Service API<br/>RESTful HTTP/JSON<br/>Port 3002]
+        TMS_API[Telematics Service API<br/>RESTful HTTP/JSON<br/>Port 3003]
+        BS_API[Billing Service API<br/>RESTful HTTP/JSON<br/>Port 3004]
+    end
+    
+    subgraph "Message Queue"
+        RMQ_API[RabbitMQ<br/>AMQP Protocol<br/>Port 5672]
+    end
+    
+    CF_API -->|HTTP/JSON| DG_API
+    AF_API -->|HTTP/JSON| DG_API
+    
+    DG_API -->|HTTP/JSON| US_API
+    DG_API -->|HTTP/JSON| CS_API
+    DG_API -->|HTTP/JSON| TS_API
+    DG_API -->|HTTP/JSON| TMS_API
+    DG_API -->|HTTP/JSON| BS_API
+    
+    TMS_API -->|AMQP| RMQ_API
+    
+    style CF_API fill:#e1f5ff
+    style AF_API fill:#e1f5ff
+    style DG_API fill:#fff4e1
+    style US_API fill:#e8f5e9
+    style CS_API fill:#e8f5e9
+    style TS_API fill:#e8f5e9
+    style TMS_API fill:#e8f5e9
+    style BS_API fill:#e8f5e9
+    style RMQ_API fill:#fff9c4
+```
+
+### Архитектура контейнеров
+
+```mermaid
+graph TB
+    subgraph "Network: zdrive-network"
+        subgraph "Frontend Containers"
+            CF_C[Client Frontend<br/>Nginx + React<br/>Port 80]
+            AF_C[Admin Frontend<br/>Nginx + React<br/>Port 80]
+        end
+        
+        subgraph "Reverse Proxy"
+            TR_C[Traefik<br/>Reverse Proxy<br/>Ports 80, 8080]
+        end
+        
+        subgraph "API Gateway Container"
+            DG_C[Dispatcher Service<br/>Rust + Axum<br/>Port 8080]
+        end
+        
+        subgraph "Microservice Containers"
+            US_C[Users Service<br/>Rust + Axum<br/>Port 3000]
+            CS_C[Cars Service<br/>Rust + Axum<br/>Port 3001]
+            TS_C[Trips Service<br/>Rust + Axum<br/>Port 3002]
+            TMS_C[Telematics Service<br/>Rust + Axum<br/>Port 3003]
+            BS_C[Billing Service<br/>Rust + Axum<br/>Port 3004]
+        end
+        
+        subgraph "Database Containers"
+            PGU_C[(PostgreSQL 16<br/>Users DB<br/>Port 5432)]
+            PGC_C[(PostgreSQL 16<br/>Cars DB<br/>Port 5432)]
+            PGT_C[(PostgreSQL 16<br/>Trips DB<br/>Port 5432)]
+            PGB_C[(PostgreSQL 16<br/>Billing DB<br/>Port 5432)]
+        end
+        
+        subgraph "Cache Container"
+            RD_C[(Redis 7<br/>Cache<br/>Port 6379)]
+        end
+        
+        subgraph "Message Broker Container"
+            RMQ_C[RabbitMQ 3<br/>Management<br/>Ports 5672, 15672]
+        end
+        
+        subgraph "Storage Volumes"
+            V1[postgres_users_data<br/>Volume]
+            V2[postgres_cars_data<br/>Volume]
+            V3[postgres_trips_data<br/>Volume]
+            V4[postgres_billing_data<br/>Volume]
+            V5[redis_data<br/>Volume]
+            V6[rabbitmq_data<br/>Volume]
+        end
+    end
+    
+    CF_C --> TR_C
+    AF_C --> TR_C
+    TR_C --> DG_C
+    DG_C --> US_C
+    DG_C --> CS_C
+    DG_C --> TS_C
+    DG_C --> TMS_C
+    DG_C --> BS_C
+    
+    US_C --> PGU_C
+    CS_C --> PGC_C
+    TS_C --> PGT_C
+    BS_C --> PGB_C
+    TMS_C --> RD_C
+    
+    TMS_C --> RMQ_C
+    
+    PGU_C --> V1
+    PGC_C --> V2
+    PGT_C --> V3
+    PGB_C --> V4
+    RD_C --> V5
+    RMQ_C --> V6
+    
+    style CF_C fill:#e1f5ff
+    style AF_C fill:#e1f5ff
+    style TR_C fill:#ffebee
+    style DG_C fill:#fff4e1
+    style US_C fill:#e8f5e9
+    style CS_C fill:#e8f5e9
+    style TS_C fill:#e8f5e9
+    style TMS_C fill:#e8f5e9
+    style BS_C fill:#e8f5e9
+    style PGU_C fill:#f3e5f5
+    style PGC_C fill:#f3e5f5
+    style PGT_C fill:#f3e5f5
+    style PGB_C fill:#f3e5f5
+    style RD_C fill:#f3e5f5
+    style RMQ_C fill:#fff9c4
+    style V1 fill:#e0e0e0
+    style V2 fill:#e0e0e0
+    style V3 fill:#e0e0e0
+    style V4 fill:#e0e0e0
+    style V5 fill:#e0e0e0
+    style V6 fill:#e0e0e0
+```
+
 ## Запуск через Docker Compose
 
 ### Быстрый старт
