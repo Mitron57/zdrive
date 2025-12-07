@@ -359,8 +359,11 @@ zdrive/
 ├── frontend/
 │   ├── client/     # Клиентский фронтенд (React)
 │   └── admin/      # Админский фронтенд (React)
+├── k8s/            # Kubernetes конфигурации
+├── traefik/        # Traefik конфигурация
+├── scripts/        # Скрипты для заполнения данных
 ├── docker-compose.yaml
-└── Cargo.toml      # Workspace configuration
+└── README.md
 ```
 
 Каждый сервис следует луковой архитектуре:
@@ -373,11 +376,13 @@ zdrive/
 ## Тестирование
 
 ```bash
-# Запустить все тесты
-cargo test --workspace
-
 # Тесты конкретного сервиса
-cargo test --package users
+cd users && cargo test
+cd cars && cargo test
+cd trips && cargo test
+cd telematics && cargo test
+cd billing && cargo test
+cd dispatcher && cargo test
 ```
 
 ## Лицензия
