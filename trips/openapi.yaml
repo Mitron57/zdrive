@@ -1,0 +1,400 @@
+openapi: 3.0.3
+info:
+  title: Trips Service API
+  description: |
+    Микросервис для управления поездками и резервациями в системе каршеринга.
+    Предоставляет функциональность создания, активации, завершения и отмены поездок.
+    Связывает пользователей и машины через сущность Trip.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@zdrive.example
+
+servers:
+  - url: http://localhost:3002
+    description: Локальный сервер разработки
+  - url: http://api.zdrive.example
+    description: Продакшн сервер
+
+tags:
+  - name: trips
+    description: Операции с поездками
+
+paths:
+  /trips:
+    post:
+      tags:
+        - trips
+      summary: Начать поездку (создать резервацию)
+      description: |
+        Создает новую резервацию поездки со статусом "reserved".
+        Проверяет, что у пользователя нет активной поездки и машина не занята.
+        Для активации поездки используйте PUT /trips/:id/activate
+      operationId: startTrip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+            example:
+              user_id: "550e8400-e29b-41d4-a716-446655440000"
+              car_id: "660e8400-e29b-41d4-a716-446655440001"
+      responses:
+        '200':
+          description: Резервация успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartTripResponse'
+              example:
+                trip_id: "770e8400-e29b-41d4-a716-446655440002"
+        '409':
+          description: Конфликт - пользователь уже имеет активную поездку или машина занята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "User already has an active trip"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /trips/{id}:
+    get:
+      tags:
+        - trips
+      summary: Получить данные поездки
+      description: Возвращает информацию о поездке по её ID
+      operationId: getTrip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID поездки
+          schema:
+            type: string
+            format: uuid
+          example: "770e8400-e29b-41d4-a716-446655440002"
+      responses:
+        '200':
+          description: Данные поездки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripResponse'
+              example:
+                id: "770e8400-e29b-41d4-a716-446655440002"
+                user_id: "550e8400-e29b-41d4-a716-446655440000"
+                car_id: "660e8400-e29b-41d4-a716-446655440001"
+                status: "reserved"
+                started_at: null
+                ended_at: null
+                cancelled_at: null
+                created_at: "2024-01-15T10:30:00Z"
+        '404':
+          description: Поездка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Обновить поездку
+      description: |
+        Используйте конкретные endpoints для операций:
+        - PUT /trips/:id/activate - активировать поездку
+        - PUT /trips/:id/end - завершить поездку
+        - PUT /trips/:id/cancel - отменить поездку
+      operationId: updateTripInfo
+      deprecated: true
+
+  /trips/{id}/activate:
+    put:
+      tags:
+        - trips
+      summary: Активировать поездку
+      description: |
+        Переводит поездку из статуса "reserved" в "active".
+        Устанавливает время начала поездки (started_at).
+        Это означает, что пользователь реально начал использовать машину.
+      operationId: activateTrip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID поездки
+          schema:
+            type: string
+            format: uuid
+          example: "770e8400-e29b-41d4-a716-446655440002"
+      responses:
+        '200':
+          description: Поездка успешно активирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Trip activated successfully"
+        '400':
+          description: Невозможно активировать поездку (неверный статус)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Cannot activate trip: invalid status transition from active to active"
+        '404':
+          description: Поездка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /trips/{id}/end:
+    put:
+      tags:
+        - trips
+      summary: Завершить поездку
+      description: |
+        Переводит поездку из статуса "active" в "completed".
+        Устанавливает время окончания поездки (ended_at).
+        После этого можно рассчитать стоимость поездки в billing сервисе.
+      operationId: endTrip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID поездки
+          schema:
+            type: string
+            format: uuid
+          example: "770e8400-e29b-41d4-a716-446655440002"
+      responses:
+        '200':
+          description: Поездка успешно завершена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Trip ended successfully"
+        '400':
+          description: Невозможно завершить поездку (неверный статус)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Cannot end trip: invalid status transition from reserved to completed"
+        '404':
+          description: Поездка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /trips/{id}/cancel:
+    put:
+      tags:
+        - trips
+      summary: Отменить поездку
+      description: |
+        Переводит поездку в статус "cancelled".
+        Можно отменять только поездки со статусом "reserved" или "active".
+        Устанавливает время отмены (cancelled_at).
+      operationId: cancelTrip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID поездки
+          schema:
+            type: string
+            format: uuid
+          example: "770e8400-e29b-41d4-a716-446655440002"
+      responses:
+        '200':
+          description: Поездка успешно отменена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Trip cancelled successfully"
+        '400':
+          description: Невозможно отменить поездку (неверный статус)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Cannot cancel trip: invalid status transition from completed to cancelled"
+        '404':
+          description: Поездка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{user_id}/trips:
+    get:
+      tags:
+        - trips
+      summary: Получить все поездки пользователя
+      description: Возвращает список всех поездок указанного пользователя
+      operationId: getUserTrips
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: UUID пользователя
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Список поездок пользователя
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TripResponse'
+              example:
+                - id: "770e8400-e29b-41d4-a716-446655440002"
+                  user_id: "550e8400-e29b-41d4-a716-446655440000"
+                  car_id: "660e8400-e29b-41d4-a716-446655440001"
+                  status: "completed"
+                  started_at: "2024-01-15T10:30:00Z"
+                  ended_at: "2024-01-15T11:45:00Z"
+                  cancelled_at: null
+                  created_at: "2024-01-15T10:25:00Z"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    StartTripRequest:
+      type: object
+      required:
+        - user_id
+        - car_id
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        car_id:
+          type: string
+          format: uuid
+          description: UUID машины
+          example: "660e8400-e29b-41d4-a716-446655440001"
+
+    StartTripResponse:
+      type: object
+      properties:
+        trip_id:
+          type: string
+          format: uuid
+          description: UUID созданной поездки
+          example: "770e8400-e29b-41d4-a716-446655440002"
+
+    TripResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID поездки
+          example: "770e8400-e29b-41d4-a716-446655440002"
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        car_id:
+          type: string
+          format: uuid
+          description: UUID машины
+          example: "660e8400-e29b-41d4-a716-446655440001"
+        status:
+          type: string
+          enum: [reserved, active, completed, cancelled]
+          description: Статус поездки
+          example: "reserved"
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Время начала поездки (устанавливается при активации)
+          example: "2024-01-15T10:30:00Z"
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Время окончания поездки (устанавливается при завершении)
+          example: "2024-01-15T11:45:00Z"
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Время отмены поездки (устанавливается при отмене)
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          description: Время создания резервации
+          example: "2024-01-15T10:25:00Z"
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Сообщение об успешной операции
+          example: "Trip activated successfully"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Описание ошибки
+          example: "Trip not found"
+

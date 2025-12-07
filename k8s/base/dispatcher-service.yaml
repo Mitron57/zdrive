@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dispatcher
+  namespace: zdrive
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dispatcher
+  template:
+    metadata:
+      labels:
+        app: dispatcher
+    spec:
+      containers:
+      - name: dispatcher
+        image: zdrive-dispatcher:latest  # Замените на ваш образ
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: USERS_SERVICE_URL
+          value: http://users-service:3000
+        - name: CARS_SERVICE_URL
+          value: http://cars-service:3001
+        - name: TRIPS_SERVICE_URL
+          value: http://trips-service:3002
+        - name: TELEMATICS_SERVICE_URL
+          value: http://telematics-service:3003
+        - name: BILLING_SERVICE_URL
+          value: http://billing-service:3004
+        - name: PORT
+          value: "8080"
+        - name: RUST_LOG
+          value: info
+        - name: RUST_BACKTRACE
+          value: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-services
+        image: curlimages/curl:latest
+        command:
+        - sh
+        - -c
+        - |
+          until curl -f http://users-service:3000/health && \
+                curl -f http://cars-service:3001/health && \
+                curl -f http://trips-service:3002/health && \
+                curl -f http://telematics-service:3003/health && \
+                curl -f http://billing-service:3004/health; do
+            echo "Waiting for services..."
+            sleep 2
+          done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dispatcher
+  namespace: zdrive
+spec:
+  selector:
+    app: dispatcher
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+

@@ -1,0 +1,356 @@
+services:
+  # Traefik - Reverse Proxy
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    command:
+      - "--configfile=/etc/traefik/traefik.yml"
+    ports:
+      - "80:80"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+    networks:
+      - zdrive-network
+
+  # PostgreSQL - Users Service Database
+  postgres-users:
+    image: postgres:16-alpine
+    container_name: postgres-users
+    environment:
+      POSTGRES_USER: zdrive
+      POSTGRES_PASSWORD: zdrive_password
+      POSTGRES_DB: zdrive_users
+    volumes:
+      - postgres_users_data:/var/lib/postgresql/data
+    networks:
+      - zdrive-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zdrive -d zdrive_users"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL - Cars Service Database
+  postgres-cars:
+    image: postgres:16-alpine
+    container_name: postgres-cars
+    environment:
+      POSTGRES_USER: zdrive
+      POSTGRES_PASSWORD: zdrive_password
+      POSTGRES_DB: zdrive_cars
+    volumes:
+      - postgres_cars_data:/var/lib/postgresql/data
+    networks:
+      - zdrive-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zdrive -d zdrive_cars"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL - Trips Service Database
+  postgres-trips:
+    image: postgres:16-alpine
+    container_name: postgres-trips
+    environment:
+      POSTGRES_USER: zdrive
+      POSTGRES_PASSWORD: zdrive_password
+      POSTGRES_DB: zdrive_trips
+    volumes:
+      - postgres_trips_data:/var/lib/postgresql/data
+    networks:
+      - zdrive-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zdrive -d zdrive_trips"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL - Billing Service Database
+  postgres-billing:
+    image: postgres:16-alpine
+    container_name: postgres-billing
+    environment:
+      POSTGRES_USER: zdrive
+      POSTGRES_PASSWORD: zdrive_password
+      POSTGRES_DB: zdrive_billing
+    volumes:
+      - postgres_billing_data:/var/lib/postgresql/data
+    networks:
+      - zdrive-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zdrive -d zdrive_billing"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - Cache for telematics
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    # Порт не пробрасывается на хост - доступен только внутри сети
+    volumes:
+      - redis_data:/data
+    networks:
+      - zdrive-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ - Message broker for telematics
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: zdrive
+      RABBITMQ_DEFAULT_PASS: zdrive_password
+    # Порт AMQP (5672) не пробрасывается - доступен только внутри сети
+    # Management UI доступен через Traefik прокси на rabbitmq.localhost или localhost/rabbitmq
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - zdrive-network
+    entrypoint: sh -c "chown -R rabbitmq:rabbitmq /var/lib/rabbitmq && exec docker-entrypoint.sh rabbitmq-server"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Users Service Migrations
+  users-migrate:
+    build:
+      context: .
+      dockerfile: users/Dockerfile
+    container_name: users-migrate
+    environment:
+      DATABASE_URL: postgresql://zdrive:zdrive_password@postgres-users:5432/zdrive_users
+    command: ["./migrate"]
+    depends_on:
+      postgres-users:
+        condition: service_healthy
+    networks:
+      - zdrive-network
+    restart: "no"
+
+  # Users Service
+  users-service:
+    build:
+      context: .
+      dockerfile: users/Dockerfile
+    container_name: users-service
+    environment:
+      DATABASE_URL: postgresql://zdrive:zdrive_password@postgres-users:5432/zdrive_users
+      PORT: 3000
+      JWT_SECRET: your-secret-jwt-key-change-in-production
+      RUST_LOG: info
+      RUST_BACKTRACE: 1
+    depends_on:
+      postgres-users:
+        condition: service_healthy
+      users-migrate:
+        condition: service_completed_successfully
+    networks:
+      - zdrive-network
+    labels:
+      - "traefik.enable=false"  # Доступен только через dispatcher
+
+  # Cars Service Migrations
+  cars-migrate:
+    build:
+      context: .
+      dockerfile: cars/Dockerfile
+    container_name: cars-migrate
+    environment:
+      DATABASE_URL: postgresql://zdrive:zdrive_password@postgres-cars:5432/zdrive_cars
+    command: ["./migrate"]
+    depends_on:
+      postgres-cars:
+        condition: service_healthy
+    networks:
+      - zdrive-network
+    restart: "no"
+
+  # Cars Service
+  cars-service:
+    build:
+      context: .
+      dockerfile: cars/Dockerfile
+    container_name: cars-service
+    environment:
+      DATABASE_URL: postgresql://zdrive:zdrive_password@postgres-cars:5432/zdrive_cars
+      PORT: 3001
+      RUST_LOG: info
+      RUST_BACKTRACE: 1
+    depends_on:
+      postgres-cars:
+        condition: service_healthy
+      cars-migrate:
+        condition: service_completed_successfully
+    networks:
+      - zdrive-network
+    labels:
+      - "traefik.enable=false"  # Доступен только через dispatcher
+
+  # Trips Service Migrations
+  trips-migrate:
+    build:
+      context: .
+      dockerfile: trips/Dockerfile
+    container_name: trips-migrate
+    environment:
+      DATABASE_URL: postgresql://zdrive:zdrive_password@postgres-trips:5432/zdrive_trips
+    command: ["./migrate"]
+    depends_on:
+      postgres-trips:
+        condition: service_healthy
+    networks:
+      - zdrive-network
+    restart: "no"
+
+  # Trips Service
+  trips-service:
+    build:
+      context: .
+      dockerfile: trips/Dockerfile
+    container_name: trips-service
+    environment:
+      DATABASE_URL: postgresql://zdrive:zdrive_password@postgres-trips:5432/zdrive_trips
+      PORT: 3002
+      RUST_LOG: info
+      RUST_BACKTRACE: 1
+    depends_on:
+      postgres-trips:
+        condition: service_healthy
+      trips-migrate:
+        condition: service_completed_successfully
+    networks:
+      - zdrive-network
+    labels:
+      - "traefik.enable=false"  # Доступен только через dispatcher
+
+  # Telematics Service
+  telematics-service:
+    build:
+      context: .
+      dockerfile: telematics/Dockerfile
+    container_name: telematics-service
+    environment:
+      AMQP_URL: amqp://zdrive:zdrive_password@rabbitmq:5672/%2f
+      REDIS_URL: redis://redis:6379
+      PORT: 3003
+      RUST_LOG: info
+      RUST_BACKTRACE: 1
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - zdrive-network
+    labels:
+      - "traefik.enable=false"  # Доступен только через dispatcher
+
+  # Billing Service Migrations
+  billing-migrate:
+    build:
+      context: .
+      dockerfile: billing/Dockerfile
+    container_name: billing-migrate
+    environment:
+      DATABASE_URL: postgresql://zdrive:zdrive_password@postgres-billing:5432/zdrive_billing
+    command: ["./migrate"]
+    depends_on:
+      postgres-billing:
+        condition: service_healthy
+    networks:
+      - zdrive-network
+    restart: "no"
+
+  # Billing Service
+  billing-service:
+    build:
+      context: .
+      dockerfile: billing/Dockerfile
+    container_name: billing-service
+    environment:
+      DATABASE_URL: postgresql://zdrive:zdrive_password@postgres-billing:5432/zdrive_billing
+      PORT: 3004
+      RUST_LOG: info
+      RUST_BACKTRACE: 1
+    depends_on:
+      postgres-billing:
+        condition: service_healthy
+      billing-migrate:
+        condition: service_completed_successfully
+    networks:
+      - zdrive-network
+    labels:
+      - "traefik.enable=false"  # Доступен только через dispatcher
+
+  # Dispatcher Service (API Gateway)
+  dispatcher:
+    build:
+      context: .
+      dockerfile: dispatcher/Dockerfile
+    container_name: dispatcher
+    environment:
+      USERS_SERVICE_URL: http://users-service:3000
+      CARS_SERVICE_URL: http://cars-service:3001
+      TRIPS_SERVICE_URL: http://trips-service:3002
+      TELEMATICS_SERVICE_URL: http://telematics-service:3003
+      BILLING_SERVICE_URL: http://billing-service:3004
+      PORT: 8080
+      RUST_LOG: info
+      RUST_BACKTRACE: 1
+    depends_on:
+      users-service:
+        condition: service_started
+      cars-service:
+        condition: service_started
+      trips-service:
+        condition: service_started
+      telematics-service:
+        condition: service_started
+      billing-service:
+        condition: service_started
+    networks:
+      - zdrive-network
+
+  # Client Frontend
+  client-frontend:
+    build:
+      context: ./frontend/client
+      dockerfile: Dockerfile
+    container_name: client-frontend
+    environment:
+      VITE_API_URL: http://localhost
+    networks:
+      - zdrive-network
+
+  # Admin Frontend
+  admin-frontend:
+    build:
+      context: ./frontend/admin
+      dockerfile: Dockerfile
+    container_name: admin-frontend
+    environment:
+      VITE_API_URL: http://localhost
+    networks:
+      - zdrive-network
+
+volumes:
+  postgres_users_data:
+  postgres_cars_data:
+  postgres_trips_data:
+  postgres_billing_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  zdrive-network:
+    driver: bridge
+

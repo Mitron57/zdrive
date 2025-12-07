@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telematics-service
+  namespace: zdrive
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: telematics-service
+  template:
+    metadata:
+      labels:
+        app: telematics-service
+    spec:
+      containers:
+      - name: telematics-service
+        image: zdrive-telematics:latest  # Замените на ваш образ
+        ports:
+        - containerPort: 3003
+          name: http
+        env:
+        - name: AMQP_URL
+          value: amqp://zdrive:zdrive_password@rabbitmq:5672/%2f
+        - name: REDIS_URL
+          value: redis://redis:6379
+        - name: PORT
+          value: "3003"
+        - name: RUST_LOG
+          value: info
+        - name: RUST_BACKTRACE
+          value: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3003
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3003
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-redis
+        image: redis:7-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until redis-cli -h redis ping; do
+            echo "Waiting for redis..."
+            sleep 2
+          done
+      - name: wait-for-rabbitmq
+        image: rabbitmq:3-management
+        command:
+        - sh
+        - -c
+        - |
+          until rabbitmq-diagnostics -q ping; do
+            echo "Waiting for rabbitmq..."
+            sleep 2
+          done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telematics-service
+  namespace: zdrive
+spec:
+  selector:
+    app: telematics-service
+  ports:
+  - port: 3003
+    targetPort: 3003
+    name: http
+

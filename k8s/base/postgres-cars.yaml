@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-cars-pvc
+  namespace: zdrive
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-cars
+  namespace: zdrive
+spec:
+  serviceName: postgres-cars
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-cars
+  template:
+    metadata:
+      labels:
+        app: postgres-cars
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: zdrive-secrets
+              key: postgres-user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zdrive-secrets
+              key: postgres-password
+        - name: POSTGRES_DB
+          value: zdrive_cars
+        ports:
+        - containerPort: 5432
+          name: postgres
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - zdrive
+            - -d
+            - zdrive_cars
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - zdrive
+            - -d
+            - zdrive_cars
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-cars-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-cars
+  namespace: zdrive
+spec:
+  selector:
+    app: postgres-cars
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+

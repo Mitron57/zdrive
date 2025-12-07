@@ -1,0 +1,87 @@
+entryPoints:
+  web:
+    address: ":80"
+
+api:
+  insecure: true
+  dashboard: true
+
+providers:
+  file:
+    filename: /etc/traefik/traefik.yml
+    watch: true
+
+log:
+  level: INFO
+
+http:
+  routers:
+    traefik:
+      rule: "Host(`traefik.localhost`)"
+      entryPoints:
+        - web
+      service: traefik
+
+    dispatcher:
+      rule: "Host(`api.localhost`) || (Host(`localhost`) && PathPrefix(`/api`))"
+      entryPoints:
+        - web
+      middlewares:
+        - dispatcher-stripprefix
+      priority: 5
+      service: dispatcher
+
+    client:
+      rule: "(Host(`client.localhost`) || (Host(`localhost`) && PathPrefix(`/client`)))"
+      entryPoints:
+        - web
+      priority: 10
+      service: client
+
+    admin:
+      rule: "(Host(`admin.localhost`) || (Host(`localhost`) && PathPrefix(`/admin`)))"
+      entryPoints:
+        - web
+      priority: 10
+      service: admin
+
+    rabbitmq:
+      rule: "Host(`rabbitmq.localhost`)"
+      entryPoints:
+        - web
+      priority: 15
+      service: rabbitmq
+
+  middlewares:
+    dispatcher-stripprefix:
+      stripPrefix:
+        prefixes:
+          - /api
+    
+
+  services:
+    traefik:
+      loadBalancer:
+        servers:
+          - url: "http://traefik:8080"
+
+    dispatcher:
+      loadBalancer:
+        servers:
+          - url: "http://dispatcher:8080"
+
+    client:
+      loadBalancer:
+        servers:
+          - url: "http://client-frontend:80"
+
+    admin:
+      loadBalancer:
+        servers:
+          - url: "http://admin-frontend:80"
+
+    rabbitmq:
+      loadBalancer:
+        servers:
+          - url: "http://rabbitmq:15672"
+

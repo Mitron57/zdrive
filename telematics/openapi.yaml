@@ -1,0 +1,317 @@
+openapi: 3.0.3
+info:
+  title: Telematics Service API
+  description: |
+    Микросервис для управления телематикой машин в системе каршеринга.
+    Предоставляет функциональность отправки команд на IoT устройства машин через RabbitMQ
+    и получения данных сенсоров (топливо, локация, скорость, температура и т.д.) из Redis.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@zdrive.example
+
+servers:
+  - url: http://localhost:3003
+    description: Локальный сервер разработки
+  - url: http://api.zdrive.example
+    description: Продакшн сервер
+
+tags:
+  - name: commands
+    description: Отправка команд на IoT устройства машин
+  - name: sensors
+    description: Получение данных сенсоров машин
+
+paths:
+  /commands:
+    post:
+      tags:
+        - commands
+      summary: Отправить команду на машину
+      description: |
+        Отправляет команду на IoT устройство машины через RabbitMQ.
+        Команда публикуется в топик, соответствующий car_id машины.
+      operationId: sendCommand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendCommandRequest'
+            example:
+              car_id: "550e8400-e29b-41d4-a716-446655440000"
+              command_type: "open_door"
+      responses:
+        '200':
+          description: Команда успешно отправлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendCommandResponse'
+              example:
+                command_id: "770e8400-e29b-41d4-a716-446655440002"
+        '400':
+          description: Неверный тип команды
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid command type: invalid_command"
+        '503':
+          description: Сервис недоступен (RabbitMQ недоступен)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Failed to send command to car"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sensors:
+    get:
+      tags:
+        - sensors
+      summary: Получить данные сенсоров
+      description: |
+        Возвращает данные сенсоров для указанного VIN или всех машин, если VIN не указан.
+        Данные берутся из Redis HSET, где ключ - это VIN машины.
+      operationId: getSensorData
+      parameters:
+        - name: vin
+          in: query
+          required: false
+          description: VIN номер машины для фильтрации
+          schema:
+            type: string
+          example: "1HGBH41JXMN109186"
+      responses:
+        '200':
+          description: Данные сенсоров
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SensorDataResponse'
+              example:
+                - vin: "1HGBH41JXMN109186"
+                  license_plate: "А123БВ777"
+                  fuel_level: 75.5
+                  location:
+                    latitude: 55.7558
+                    longitude: 37.6173
+                  door_status: "closed"
+                  speed: 0.0
+                  temperature: 22.5
+                  timestamp: "2024-01-15T10:30:00Z"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sensors/all:
+    get:
+      tags:
+        - sensors
+      summary: Получить все данные сенсоров
+      description: |
+        Возвращает данные сенсоров для всех машин из Redis.
+        Удобно для отображения на админ-дашборде.
+      operationId: getAllSensorData
+      responses:
+        '200':
+          description: Все данные сенсоров
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SensorDataWithVinResponse'
+              example:
+                - vin: "1HGBH41JXMN109186"
+                  license_plate: "А123БВ777"
+                  fuel_level: 75.5
+                  location:
+                    latitude: 55.7558
+                    longitude: 37.6173
+                  door_status: "closed"
+                  speed: 0.0
+                  temperature: 22.5
+                  timestamp: "2024-01-15T10:30:00Z"
+                - vin: "2HGBH41JXMN109187"
+                  license_plate: "В456ГД888"
+                  fuel_level: 50.0
+                  location:
+                    latitude: 55.7512
+                    longitude: 37.6178
+                  door_status: "open"
+                  speed: 45.5
+                  temperature: 20.0
+                  timestamp: "2024-01-15T10:31:00Z"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sensors/car/{car_id}:
+    get:
+      tags:
+        - sensors
+      summary: Получить данные сенсоров по car_id
+      description: |
+        Возвращает данные сенсоров для машины по её car_id.
+        Требует интеграции с cars сервисом для получения VIN по car_id.
+      operationId: getSensorDataByCarId
+      parameters:
+        - name: car_id
+          in: path
+          required: true
+          description: UUID машины из cars сервиса
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Данные сенсоров для машины
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorDataWithVinResponse'
+        '501':
+          description: Функциональность не реализована (требует интеграции с cars сервисом)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Car ID lookup requires integration with cars service"
+                message: "To get sensor data by car_id, first get license_plate from cars service, then use /sensors?vin={vin} or /sensors/all"
+                alternative: "Use /sensors/all to get all sensor data and filter by car_id on client side"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SendCommandRequest:
+      type: object
+      required:
+        - car_id
+        - command_type
+      properties:
+        car_id:
+          type: string
+          format: uuid
+          description: UUID машины из cars сервиса
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        command_type:
+          type: string
+          enum: [open_door, close_door, lock_door, unlock_door, lock_engine, unlock_engine, start_engine, stop_engine]
+          description: Тип команды для отправки на IoT устройство
+          example: "open_door"
+
+    SendCommandResponse:
+      type: object
+      properties:
+        command_id:
+          type: string
+          format: uuid
+          description: UUID отправленной команды
+          example: "770e8400-e29b-41d4-a716-446655440002"
+
+    SensorDataResponse:
+      type: object
+      properties:
+        vin:
+          type: string
+          description: VIN номер машины
+          example: "1HGBH41JXMN109186"
+        license_plate:
+          type: string
+          description: Госномер машины
+          example: "А123БВ777"
+        fuel_level:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          description: Уровень топлива в процентах (0.0 - 100.0)
+          example: 75.5
+        location:
+          $ref: '#/components/schemas/Location'
+        door_status:
+          type: string
+          enum: [open, closed, locked]
+          description: Статус дверей
+          example: "closed"
+        speed:
+          type: number
+          format: double
+          minimum: 0
+          description: Скорость в км/ч
+          example: 0.0
+        temperature:
+          type: number
+          format: double
+          description: Температура окружающей среды в градусах Цельсия
+          example: 22.5
+        timestamp:
+          type: string
+          format: date-time
+          description: Время последнего обновления данных
+          example: "2024-01-15T10:30:00Z"
+
+    SensorDataWithVinResponse:
+      allOf:
+        - $ref: '#/components/schemas/SensorDataResponse'
+        - type: object
+          properties:
+            vin:
+              type: string
+              description: VIN номер машины (включен для удобства)
+              example: "1HGBH41JXMN109186"
+
+    Location:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: double
+          description: Широта
+          example: 55.7558
+        longitude:
+          type: number
+          format: double
+          description: Долгота
+          example: 37.6173
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Описание ошибки
+          example: "Invalid command type"
+        message:
+          type: string
+          description: Дополнительное сообщение (опционально)
+          example: "To get sensor data by car_id, first get license_plate from cars service"
+        alternative:
+          type: string
+          description: Альтернативный способ (опционально)
+          example: "Use /sensors/all to get all sensor data and filter by car_id on client side"
+

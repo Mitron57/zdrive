@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trips-migrate
+  namespace: zdrive
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        image: zdrive-trips:latest  # Замените на ваш образ
+        command: ["./migrate"]
+        env:
+        - name: DATABASE_URL
+          value: postgresql://zdrive:zdrive_password@postgres-trips:5432/zdrive_trips
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-trips -U zdrive -d zdrive_trips; do
+            echo "Waiting for postgres-trips..."
+            sleep 2
+          done
+

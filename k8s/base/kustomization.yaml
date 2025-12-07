@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: zdrive
+
+resources:
+  - namespace.yaml
+  - secrets.yaml
+  - postgres-users.yaml
+  - postgres-cars.yaml
+  - postgres-trips.yaml
+  - postgres-billing.yaml
+  - redis.yaml
+  - rabbitmq.yaml
+  - users-migrate.yaml
+  - users-service.yaml
+  - cars-migrate.yaml
+  - cars-service.yaml
+  - trips-migrate.yaml
+  - trips-service.yaml
+  - telematics-service.yaml
+  - billing-migrate.yaml
+  - billing-service.yaml
+  - dispatcher-service.yaml
+  - client-frontend.yaml
+  - admin-frontend.yaml
+  - ingress.yaml
+

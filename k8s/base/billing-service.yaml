@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-service
+  namespace: zdrive
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: billing-service
+  template:
+    metadata:
+      labels:
+        app: billing-service
+    spec:
+      containers:
+      - name: billing-service
+        image: zdrive-billing:latest  # Замените на ваш образ
+        ports:
+        - containerPort: 3004
+          name: http
+        env:
+        - name: DATABASE_URL
+          value: postgresql://zdrive:zdrive_password@postgres-billing:5432/zdrive_billing
+        - name: PORT
+          value: "3004"
+        - name: RUST_LOG
+          value: info
+        - name: RUST_BACKTRACE
+          value: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3004
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3004
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-billing -U zdrive -d zdrive_billing; do
+            echo "Waiting for postgres-billing..."
+            sleep 2
+          done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: billing-service
+  namespace: zdrive
+spec:
+  selector:
+    app: billing-service
+  ports:
+  - port: 3004
+    targetPort: 3004
+    name: http
+

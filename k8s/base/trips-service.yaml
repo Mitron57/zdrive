@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trips-service
+  namespace: zdrive
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: trips-service
+  template:
+    metadata:
+      labels:
+        app: trips-service
+    spec:
+      containers:
+      - name: trips-service
+        image: zdrive-trips:latest  # Замените на ваш образ
+        ports:
+        - containerPort: 3002
+          name: http
+        env:
+        - name: DATABASE_URL
+          value: postgresql://zdrive:zdrive_password@postgres-trips:5432/zdrive_trips
+        - name: PORT
+          value: "3002"
+        - name: RUST_LOG
+          value: info
+        - name: RUST_BACKTRACE
+          value: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-trips -U zdrive -d zdrive_trips; do
+            echo "Waiting for postgres-trips..."
+            sleep 2
+          done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trips-service
+  namespace: zdrive
+spec:
+  selector:
+    app: trips-service
+  ports:
+  - port: 3002
+    targetPort: 3002
+    name: http
+

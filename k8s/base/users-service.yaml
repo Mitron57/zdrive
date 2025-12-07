@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-service
+  namespace: zdrive
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: users-service
+  template:
+    metadata:
+      labels:
+        app: users-service
+    spec:
+      containers:
+      - name: users-service
+        image: zdrive-users:latest  # Замените на ваш образ
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: DATABASE_URL
+          value: postgresql://zdrive:zdrive_password@postgres-users:5432/zdrive_users
+        - name: PORT
+          value: "3000"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: zdrive-secrets
+              key: jwt-secret
+        - name: RUST_LOG
+          value: info
+        - name: RUST_BACKTRACE
+          value: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-users -U zdrive -d zdrive_users; do
+            echo "Waiting for postgres-users..."
+            sleep 2
+          done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: users-service
+  namespace: zdrive
+spec:
+  selector:
+    app: users-service
+  ports:
+  - port: 3000
+    targetPort: 3000
+    name: http
+

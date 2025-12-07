@@ -1,0 +1,357 @@
+openapi: 3.0.3
+info:
+  title: Users Service API
+  description: |
+    Микросервис для управления пользователями в системе каршеринга.
+    Предоставляет функциональность регистрации, авторизации и управления данными пользователей.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@zdrive.example
+
+servers:
+  - url: http://localhost:3000
+    description: Локальный сервер разработки
+  - url: http://api.zdrive.example
+    description: Продакшн сервер
+
+tags:
+  - name: users
+    description: Операции с пользователями
+  - name: auth
+    description: Авторизация и аутентификация
+
+paths:
+  /users/register:
+    post:
+      tags:
+        - users
+      summary: Регистрация нового пользователя
+      description: Создает нового пользователя в системе
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              license_id: "DL123456"
+              driving_experience: 5
+              rating: 4.5
+              email: "user@example.com"
+              password: "securePassword123"
+      responses:
+        '200':
+          description: Пользователь успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+              example:
+                user_id: "550e8400-e29b-41d4-a716-446655440000"
+        '409':
+          description: Пользователь с таким email уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "User with email user@example.com already exists"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/authenticate:
+    post:
+      tags:
+        - auth
+      summary: Авторизация пользователя
+      description: Авторизует пользователя и возвращает JWT токен
+      operationId: authenticateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+            example:
+              email: "user@example.com"
+              password: "securePassword123"
+      responses:
+        '200':
+          description: Успешная авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '401':
+          description: Неверные учетные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid credentials"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{id}:
+    get:
+      tags:
+        - users
+      summary: Получить данные пользователя
+      description: Возвращает информацию о пользователе по его ID
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID пользователя
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Данные пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                license_id: "DL123456"
+                driving_experience: 5
+                rating: 4.5
+                email: "user@example.com"
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "User not found"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - users
+      summary: Обновить данные пользователя
+      description: Обновляет информацию о пользователе. Все поля опциональны.
+      operationId: updateUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID пользователя
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            example:
+              license_id: "DL789012"
+              driving_experience: 6
+              rating: 4.7
+              email: "newemail@example.com"
+      responses:
+        '200':
+          description: Пользователь успешно обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateUserResponse'
+              example:
+                message: "User updated successfully"
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "User not found"
+        '409':
+          description: Пользователь с таким email уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "User with email newemail@example.com already exists"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - license_id
+        - driving_experience
+        - rating
+        - email
+        - password
+      properties:
+        license_id:
+          type: string
+          description: Номер водительского удостоверения
+          example: "DL123456"
+        driving_experience:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Опыт вождения в годах
+          example: 5
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 5
+          description: Рейтинг водителя (5-балльная шкала)
+          example: 4.5
+        email:
+          type: string
+          format: email
+          description: Email адрес пользователя
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          minLength: 6
+          description: Пароль пользователя
+          example: "securePassword123"
+
+    RegisterResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: UUID созданного пользователя
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    AuthRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email адрес пользователя
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          description: Пароль пользователя
+          example: "securePassword123"
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT токен для авторизации
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJleHAiOjE2MDAwMDAwMDAsImlhdCI6MTYwMDAwMDAwMH0.example"
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        license_id:
+          type: string
+          description: Номер водительского удостоверения
+          example: "DL123456"
+        driving_experience:
+          type: integer
+          format: int32
+          description: Опыт вождения в годах
+          example: 5
+        rating:
+          type: number
+          format: double
+          description: Рейтинг водителя (5-балльная шкала)
+          example: 4.5
+        email:
+          type: string
+          format: email
+          description: Email адрес пользователя
+          example: "user@example.com"
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        license_id:
+          type: string
+          nullable: true
+          description: Номер водительского удостоверения
+          example: "DL789012"
+        driving_experience:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+          description: Опыт вождения в годах
+          example: 6
+        rating:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+          maximum: 5
+          description: Рейтинг водителя (5-балльная шкала)
+          example: 4.7
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: Email адрес пользователя
+          example: "newemail@example.com"
+
+    UpdateUserResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Сообщение об успешном обновлении
+          example: "User updated successfully"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Описание ошибки
+          example: "User not found"
+

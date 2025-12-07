@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: users-migrate
+  namespace: zdrive
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        image: zdrive-users:latest  # Замените на ваш образ
+        command: ["./migrate"]
+        env:
+        - name: DATABASE_URL
+          value: postgresql://zdrive:zdrive_password@postgres-users:5432/zdrive_users
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-users -U zdrive -d zdrive_users; do
+            echo "Waiting for postgres-users..."
+            sleep 2
+          done
+

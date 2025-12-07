@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cars-service
+  namespace: zdrive
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cars-service
+  template:
+    metadata:
+      labels:
+        app: cars-service
+    spec:
+      containers:
+      - name: cars-service
+        image: zdrive-cars:latest  # Замените на ваш образ
+        ports:
+        - containerPort: 3001
+          name: http
+        env:
+        - name: DATABASE_URL
+          value: postgresql://zdrive:zdrive_password@postgres-cars:5432/zdrive_cars
+        - name: PORT
+          value: "3001"
+        - name: RUST_LOG
+          value: info
+        - name: RUST_BACKTRACE
+          value: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-cars -U zdrive -d zdrive_cars; do
+            echo "Waiting for postgres-cars..."
+            sleep 2
+          done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cars-service
+  namespace: zdrive
+spec:
+  selector:
+    app: cars-service
+  ports:
+  - port: 3001
+    targetPort: 3001
+    name: http
+

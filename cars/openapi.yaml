@@ -1,0 +1,593 @@
+openapi: 3.0.3
+info:
+  title: Cars Service API
+  description: |
+    Микросервис для управления машинами и тарифами в системе каршеринга.
+    Предоставляет функциональность управления автомобилями, их состояниями и тарифами.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@zdrive.example
+
+servers:
+  - url: http://localhost:3001
+    description: Локальный сервер разработки
+  - url: http://api.zdrive.example
+    description: Продакшн сервер
+
+tags:
+  - name: cars
+    description: Операции с машинами
+  - name: tariffs
+    description: Операции с тарифами
+
+paths:
+  /cars:
+    post:
+      tags:
+        - cars
+      summary: Создать новую машину
+      description: Регистрирует новую машину в системе
+      operationId: createCar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCarRequest'
+            example:
+              model: "Toyota Camry"
+              license_plate: "А123БВ777"
+              iot_serial_number: "IOT-123456789"
+              state: "available"
+              tariff_id: "550e8400-e29b-41d4-a716-446655440000"
+              base_price: 50.0
+      responses:
+        '200':
+          description: Машина успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCarResponse'
+              example:
+                car_id: "550e8400-e29b-41d4-a716-446655440000"
+        '404':
+          description: Тариф не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Машина с таким номером или IoT устройством уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - cars
+      summary: Получить список машин
+      description: Возвращает список всех машин или машин по тарифу
+      operationId: listCars
+      parameters:
+        - name: tariff_id
+          in: query
+          required: false
+          description: UUID тарифа для фильтрации
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Список машин
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CarResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cars/{id}:
+    get:
+      tags:
+        - cars
+      summary: Получить данные машины
+      description: Возвращает информацию о машине по её ID
+      operationId: getCar
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID машины
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Данные машины
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarResponse'
+        '404':
+          description: Машина не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - cars
+      summary: Обновить данные машины
+      description: Обновляет информацию о машине. Все поля опциональны.
+      operationId: updateCar
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID машины
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCarRequest'
+            example:
+              state: "in_use"
+              base_price: 75.0
+      responses:
+        '200':
+          description: Машина успешно обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCarResponse'
+        '404':
+          description: Машина или тариф не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Конфликт (номер или IoT устройство уже заняты)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - cars
+      summary: Удалить машину
+      description: Удаляет машину из системы
+      operationId: deleteCar
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID машины
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Машина успешно удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCarResponse'
+        '404':
+          description: Машина не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tariffs:
+    post:
+      tags:
+        - tariffs
+      summary: Создать новый тариф
+      description: Создает новый тариф для машин
+      operationId: createTariff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTariffRequest'
+            example:
+              price_per_minute: 5.5
+              minimal_rating: 4.0
+              minimal_experience: 2
+      responses:
+        '200':
+          description: Тариф успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTariffResponse'
+              example:
+                tariff_id: "550e8400-e29b-41d4-a716-446655440000"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - tariffs
+      summary: Получить список тарифов
+      description: Возвращает список всех тарифов
+      operationId: listTariffs
+      responses:
+        '200':
+          description: Список тарифов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TariffResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tariffs/{id}:
+    get:
+      tags:
+        - tariffs
+      summary: Получить данные тарифа
+      description: Возвращает информацию о тарифе по его ID
+      operationId: getTariff
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID тарифа
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Данные тарифа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TariffResponse'
+        '404':
+          description: Тариф не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - tariffs
+      summary: Обновить данные тарифа
+      description: Обновляет информацию о тарифе. Все поля опциональны.
+      operationId: updateTariff
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID тарифа
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTariffRequest'
+            example:
+              price_per_minute: 6.0
+              minimal_rating: 4.5
+      responses:
+        '200':
+          description: Тариф успешно обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateTariffResponse'
+        '404':
+          description: Тариф не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    CreateCarRequest:
+      type: object
+      required:
+        - model
+        - license_plate
+        - iot_serial_number
+        - state
+        - tariff_id
+        - base_price
+      properties:
+        model:
+          type: string
+          description: Модель машины
+          example: "Toyota Camry"
+        license_plate:
+          type: string
+          description: Номерной знак
+          example: "А123БВ777"
+        iot_serial_number:
+          type: string
+          description: Серийный номер IoT устройства
+          example: "IOT-123456789"
+        state:
+          type: string
+          enum: [available, in_use, maintenance, reserved]
+          description: Состояние машины
+          example: "available"
+        tariff_id:
+          type: string
+          format: uuid
+          description: UUID тарифа
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        base_price:
+          type: number
+          format: double
+          minimum: 0
+          description: Базовая стоимость машины (добавляется к тарифу)
+          example: 50.0
+
+    CreateCarResponse:
+      type: object
+      properties:
+        car_id:
+          type: string
+          format: uuid
+          description: UUID созданной машины
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    UpdateCarRequest:
+      type: object
+      properties:
+        model:
+          type: string
+          nullable: true
+          description: Модель машины
+          example: "Toyota Camry"
+        license_plate:
+          type: string
+          nullable: true
+          description: Номерной знак
+          example: "А123БВ777"
+        iot_serial_number:
+          type: string
+          nullable: true
+          description: Серийный номер IoT устройства
+          example: "IOT-123456789"
+        state:
+          type: string
+          enum: [available, in_use, maintenance, reserved]
+          nullable: true
+          description: Состояние машины
+          example: "in_use"
+        tariff_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID тарифа
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        base_price:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+          description: Базовая стоимость машины
+          example: 75.0
+
+    UpdateCarResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Сообщение об успешном обновлении
+          example: "Car updated successfully"
+
+    CarResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID машины
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        model:
+          type: string
+          description: Модель машины
+          example: "Toyota Camry"
+        license_plate:
+          type: string
+          description: Номерной знак
+          example: "А123БВ777"
+        iot_serial_number:
+          type: string
+          description: Серийный номер IoT устройства
+          example: "IOT-123456789"
+        state:
+          type: string
+          enum: [available, in_use, maintenance, reserved]
+          description: Состояние машины
+          example: "available"
+        tariff_id:
+          type: string
+          format: uuid
+          description: UUID тарифа
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        base_price:
+          type: number
+          format: double
+          description: Базовая стоимость машины
+          example: 50.0
+
+    CreateTariffRequest:
+      type: object
+      required:
+        - price_per_minute
+        - minimal_rating
+        - minimal_experience
+      properties:
+        price_per_minute:
+          type: number
+          format: double
+          minimum: 0
+          description: Цена за минуту использования
+          example: 5.5
+        minimal_rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 5
+          description: Минимальный рейтинг водителя (5-балльная шкала)
+          example: 4.0
+        minimal_experience:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Минимальный опыт вождения в годах
+          example: 2
+
+    CreateTariffResponse:
+      type: object
+      properties:
+        tariff_id:
+          type: string
+          format: uuid
+          description: UUID созданного тарифа
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    UpdateTariffRequest:
+      type: object
+      properties:
+        price_per_minute:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+          description: Цена за минуту использования
+          example: 6.0
+        minimal_rating:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+          maximum: 5
+          description: Минимальный рейтинг водителя
+          example: 4.5
+        minimal_experience:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+          description: Минимальный опыт вождения в годах
+          example: 3
+
+    UpdateTariffResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Сообщение об успешном обновлении
+          example: "Tariff updated successfully"
+
+    TariffResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID тарифа
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        price_per_minute:
+          type: number
+          format: double
+          description: Цена за минуту использования
+          example: 5.5
+        minimal_rating:
+          type: number
+          format: double
+          description: Минимальный рейтинг водителя
+          example: 4.0
+        minimal_experience:
+          type: integer
+          format: int32
+          description: Минимальный опыт вождения в годах
+          example: 2
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Описание ошибки
+          example: "Car not found"
+
